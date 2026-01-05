@@ -1,42 +1,80 @@
+
 #include <iostream>
-#include <string.h>
-#include <fstream>
-#include <vector>
+#include <unordered_map>
+#include <string>
+#include <cstring>
+
+extern "C" {
 #include <libavcodec/avcodec.h>
-#include "libavformati/avformat.h"
-
-std::string mp3FilePath = "mp3/01 Ruin.mp3"; 
-
-void getAudioType(){
-    // set a delimeter of "."
-    // split the string into two => [name, file_ext]
-    // get type of decoding by going decodeTyep[file_ext]
+#include <libavformat/avformat.h>
 }
 
-void openFile(std::string path) {
-    std::ifstream output(path);
-    std::vector<int> buffer;
-    //int data[1024];
-    int buf_len = 1024;
-    int diviser = 2;
-    int marker =0;
-    int indx = 0;
-    int stop_value = 1024 * 3;
-    for (indx=0;indx<stop_value; indx+=buf_len) {
-        marker+=buf_len;
-        //buffer[indx:buf_len];
-        buffer.push_back([indx:marker])
-        //marker+=buf_len;
+std::unordered_map<std::string, AVCodecID> ext_map = {
+    {"mp3", AV_CODEC_ID_MP3},
+    {"aac", AV_CODEC_ID_AAC}
+};
+
+struct CodecWrapper {
+    const AVCodec* codec = nullptr;
+    AVCodecContext* ctx = nullptr;
+};
+
+const char* getExt(const char* f) {
+    const char* ext = strrchr(f, '.');
+    return ext ? ext + 1 : nullptr; // Deeply confusing: apparently this is a weird if-return statement where strrchr returns a pointer before the "." and adding to it moves the pointer by an index so we can get the actual extension
+}
+
+CodecWrapper createCodec(const char* path) {
+    CodecWrapper wrapper;
+
+    const char* ext = getExt(path);
+    if (!ext) {
+        std::cerr << "No file extension\n";
+        return wrapper;
     }
-    //std::string line;
-    //while (std::getline(output, line)) {
-      //      std::cout << line << std::endl;
-        //}
-        //
+
+    auto it = ext_map.find(ext);
+    if (it == ext_map.end()) {
+        std::cerr << "Unsupported format: " << ext << "\n";
+        return wrapper;
+    }
+
+    AVCodecID id = it->second;
+
+    wrapper.codec = avcodec_find_decoder(id);
+    if (!wrapper.codec) {
+        std::cerr << "Decoder not found\n";
+        return wrapper;
+    }
+
+    wrapper.ctx = avcodec_alloc_context3(wrapper.codec);
+    if (!wrapper.ctx) {
+        std::cerr << "Could not allocate codec context\n";
+        return wrapper;
+    }
+
+    return wrapper;
 }
 
-int main(){
-    std::cout << "Hello";
-    openFile(mp3FilePath);
+void playAudio(const char* filepath) {
+    CodecWrapper wrapper = createCodec(filepath);
+    if (!wrapper.codec || !wrapper.ctx) {
+        std::cerr << "Failed to create codec\n";
+        return;
+    }
+
+    std::cout << "Decoder ready for " << filepath << "\n";
+
+    avcodec_free_context(&wrapper.ctx);
+}
+
+int main(int argc, char** argv) {
+    if (argc < 2) {
+        std::cerr << "Usage: player <audiofile>\n";
+        return 1;
+    }
+
+    playAudio(argv[1]);
     return 0;
 }
+
