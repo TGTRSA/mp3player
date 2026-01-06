@@ -63,6 +63,23 @@ struct CodecWrapper {
     AVCodecContext* ctx = nullptr;
 };
 
+typedef enum {
+    FMT_S16_LE,
+    FMT_S24_LE,
+    FMT_S32_LE,
+    FMT_FLOAT_LE,
+} AudioFormat;
+
+snd_pcm_format_t to_alsa_format(AudioFormat fmt)
+{
+    switch (fmt) {
+        case FMT_S16_LE:   return SND_PCM_FORMAT_S16_LE;
+        case FMT_S24_LE:   return SND_PCM_FORMAT_S24_LE;
+        case FMT_S32_LE:   return SND_PCM_FORMAT_S32_LE;
+        case FMT_FLOAT_LE:return SND_PCM_FORMAT_FLOAT_LE;
+        default:           return SND_PCM_FORMAT_UNKNOWN;
+    }
+}
 
 static int get_format_from_sample_fmt(const char **fmt,
                                       enum AVSampleFormat sample_fmt)
@@ -150,10 +167,42 @@ audioInfo getAudioParams() {
 
 }
 
+void set_alsa_params(audioInfo metadata){
+    AlsaParams params;
+    // Open pcm device
+    snd_pcm_open(&params.pcm, "default", SND_PCM_STREAM_PLAYBACK, 0);
+
+    // Alloc HW Params
+    snd_pcm_hw_params_alloca(&params.params);
+
+    // fill with default
+    snd_pcm_hw_params_any(params.pcm, params.params);
+    
+    snd_pcm_format_t alsa_fmt = to_alsa_format(params.format);
+
+    if (alsa_fmt == SND_PCM_FORMAT_UNKNOWN) {
+        // handle error
+        std::cerr << "UNKNOWN PCM FORMAT";
+    }
+
+    // set params
+    snd_pcm_hw_params_set_access(params.pcm, params.params, SND_PCM_ACCESS_RW_INTERLEAVED);
+    snd_pcm_hw_params_set_format(params.pcm, params.params, SND_PCM_FORMAT_S16_LE);
+    snd_pcm_hw_params_set_channels(params.pcm, params.params, metadata.channels);
+    snd_pcm_hw_params_set_rate_near(params.pcm, params.params, &metadata.sample_rate,0 );
+
+    // Aplly
+    snd_pcm_hw_params(params.pcm, params.params);
+
+    //Cleanup
+    snd_pcm_close(params.pcm, params.params);
+
+}
+
 void send_to_sd(){
     std::cout << "Starting audio param extraction process"; 
-  audioInfo Params = getAudioParams();
-
+    audioInfo Params = getAudioParams();
+    void set_alsa_params() 
 }
 
 // returns the file extension
@@ -164,8 +213,8 @@ const char* getExt(const char* f) {
 }
 
 
-void decode(CodecWrapper w, AVPacket *packet, AVFrame **frame) {
-    std::cout << "Attempting decoding process";
+void decode(CodecWrapper w, AVPacket *packet, AVFrame *frame) {
+    std::cout << "Attempting decoding process\n";
     int ret, data_size;
     AudioBytes byteinfo;
 
@@ -175,10 +224,10 @@ void decode(CodecWrapper w, AVPacket *packet, AVFrame **frame) {
         return;
     }
 
-    AVFrame* f = *frame;
+    //AVFrame* f = *frame;
     while (true) {
         // getting frames
-        ret = avcodec_receive_frame(w.ctx, f);
+        ret = avcodec_receive_frame(w.ctx, frame);
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
             return;
         } else if (ret < 0) {
@@ -192,9 +241,9 @@ void decode(CodecWrapper w, AVPacket *packet, AVFrame **frame) {
             exit(1);
         }
         // Writing to data structure
-        for (int i = 0; i < f->nb_samples; i++) {
+        for (int i = 0; i < frame->nb_samples; i++) {
             for (int ch = 0; ch < w.ctx->ch_layout.nb_channels; ch++) {
-                std::byte* sample_ptr = reinterpret_cast<std::byte*>(f->data[ch] + data_size*i);
+                std::byte* sample_ptr = reinterpret_cast<std::byte*>(frame->data[ch] + data_size*i);
                 for (int b = 0; b < data_size; ++b) {
                     byteinfo.data.push_back(sample_ptr[b]);
                     }
@@ -202,11 +251,11 @@ void decode(CodecWrapper w, AVPacket *packet, AVFrame **frame) {
             }
         }
         send_to_sd();
-
+        av_frame_unref(frame);
 
 }
 DecodedData open_codec(CodecWrapper wrapper){
-    std::cout << "Beginning decoding process";
+    std::cout << "Beginning decoding process\n";
     DecodedData data;
     if (avcodec_open2(wrapper.ctx, wrapper.codec, NULL)<0){
         exit(0);
@@ -266,8 +315,7 @@ void playAudio(const char* filepath) {
 
     data = open_codec(wrapper);
         
-    void decode();
-
+    decode(wrapper, data.packet, data.frame);
     av_frame_free(&data.frame);
     av_packet_free(&data.packet); 
     avcodec_free_context(&wrapper.ctx);
