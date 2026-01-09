@@ -1,5 +1,6 @@
 
 #include <iostream>
+#include <libavutil/samplefmt.h>
 #include <unordered_map>
 #include <string>
 #include <cstring>
@@ -37,8 +38,21 @@ std::unordered_map<std::string, AVCodecID> ext_map = {
     {"wav", AV_CODEC_ID_WMAV1}
 };
 
+struct AlsaInformation {
+    snd_pcm_t           *handler;
+    const char*         device_name = "default";
+    snd_pcm_uframes_t   buffer_size;
+    snd_pcm_stream_t    stream_type = SND_PCM_STREAM_PLAYBACK;
+    int                 mode        = 0;
+};
 
-struct audioInfo {
+struct fileInformation {
+    int sample_rate;
+    int audio_channels;
+    AVSampleFormat s_fmt;
+};
+
+struct audioMetadata {
     unsigned int sample_rate;
     int          channels;
     AVSampleFormat sample_fmt; 
@@ -113,8 +127,9 @@ static int get_format_from_sample_fmt(const char **fmt,
     return -1;
 }
 
-audioInfo getAudioParams() {
-    audioInfo audioMetadata;
+fileInformation getAudioParams() {
+    //audioMetadata audioMetadata;
+    fileInformation file;
     //std::string str(filename);
     std::string command = "ffprobe -v error -select_streams a:0 "
                           "-show_entries stream=sample_rate,channels,sample_fmt "
@@ -145,9 +160,9 @@ audioInfo getAudioParams() {
     std::getline(STREAM, channels_str, ',');
     std::getline(STREAM, sample_fmt_str, ',');
 
-    audioMetadata.sample_rate = std::stoul(sample_rate_str);
-    audioMetadata.channels    = std::stoi(channels_str);
-    audioMetadata.sample_fmt  = av_get_sample_fmt(sample_fmt_str.c_str());
+    file.sample_rate        = std::stoul(sample_rate_str);
+    file.audio_channels     = std::stoi(channels_str);
+    file.s_fmt         = av_get_sample_fmt(sample_fmt_str.c_str());
 
     /**
      * getline() is kind of like .split() in python
@@ -158,51 +173,70 @@ audioInfo getAudioParams() {
     }
     // ---- PRINT RESULTS ----
     std::cout << "Parsed metadata:\n";
-    std::cout << "  Sample Format: " << audioMetadata.sample_fmt << "\n";
-    std::cout << "  Sample Rate:   " << audioMetadata.sample_rate << "\n";
-    std::cout << "  Channels:      " << audioMetadata.channels << "\n";
+    std::cout << "  Sample Format: " << file.s_fmt << "\n";
+    std::cout << "  Sample Rate:   " << file.sample_rate << "\n";
+    std::cout << "  Channels:      " << file.audio_channels << "\n";
     
     std::cout << "END\n"; 
-    return audioMetadata;
+    return file;
 
 }
 
-void set_alsa_params(audioInfo metadata){
-    AlsaParams params;
-    // Open pcm device
-    snd_pcm_open(&params.pcm, "default", SND_PCM_STREAM_PLAYBACK, 0);
-
-    // Alloc HW Params
-    snd_pcm_hw_params_alloca(&params.params);
-
-    // fill with default
-    snd_pcm_hw_params_any(params.pcm, params.params);
-    
-    snd_pcm_format_t alsa_fmt = to_alsa_format(params.format);
-
-    if (alsa_fmt == SND_PCM_FORMAT_UNKNOWN) {
-        // handle error
-        std::cerr << "UNKNOWN PCM FORMAT";
+void set_alsa_params(fileInformation file){
+    AlsaInformation alsaParams;
+    //fileInformation file;
+   // AlsaParams params;
+    // 1. Open PCM device
+    int rc = snd_pcm_open(&pcm_handle, alsa_device_name, stream_type, mode);
+    if (rc < 0) {
+        fprintf(stderr, "Could not open ALSA device: %s\n", snd_strerror(rc));
+        return 1;
     }
 
-    // set params
-    snd_pcm_hw_params_set_access(params.pcm, params.params, SND_PCM_ACCESS_RW_INTERLEAVED);
-    snd_pcm_hw_params_set_format(params.pcm, params.params, SND_PCM_FORMAT_S16_LE);
-    snd_pcm_hw_params_set_channels(params.pcm, params.params, metadata.channels);
-    snd_pcm_hw_params_set_rate_near(params.pcm, params.params, &metadata.sample_rate,0 );
+    // 2. Set hardware parameters
+    rc = snd_pcm_set_params(
+        alsaParams.pcm_handle,
+        SND_PCM_FORMAT_FLOAT_LE,
+        SND_PCM_ACCESS_RW_INTERLEAVED,
+        file.audio_channels,
+        file.sample_rate,
+        1,        // soft_resample
+        50000     // latency in microseconds
+    );
+    if (rc < 0) {
+        fprintf(stderr, "Unable to set PCM parameters: %s\n", snd_strerror(rc));
+        return 1;
+    }
 
-    // Aplly
-    snd_pcm_hw_params(params.pcm, params.params);
+    
+    // 3. Write to ALSA
+    int offset = 0;
+    while (offset < 48000) {
+        snd_pcm_uframes_t frames_to_write = frame_size;
+        if (offset + frame_size > 48000) frames_to_write = 48000 - offset;
 
-    //Cleanup
-    snd_pcm_close(params.pcm, params.params);
+        rc = snd_pcm_writei(pcm_handle, buffer + offset * audio_channels, frames_to_write);
+        if (rc == -EPIPE) {
+            // buffer underrun
+            fprintf(stderr, "Underrun occurred\n");
+            snd_pcm_prepare(pcm_handle);
+        } else if (rc < 0) {
+            fprintf(stderr, "Error writing to PCM device: %s\n", snd_strerror(rc));
+        } else {
+            offset += rc;
+        }
+    }
+
+    // 5. Cleanup
+    snd_pcm_drain(pcm_handle);
+    snd_pcm_close(pcm_handle);
 
 }
 
 void send_to_sd(){
     std::cout << "Starting audio param extraction process"; 
-    audioInfo Params = getAudioParams();
-    void set_alsa_params() 
+    fileInformation params = getAudioParams();
+    void set_alsa_params(params) ;
 }
 
 // returns the file extension
@@ -316,8 +350,10 @@ void playAudio(const char* filepath) {
     data = open_codec(wrapper);
         
     decode(wrapper, data.packet, data.frame);
+
     av_frame_free(&data.frame);
     av_packet_free(&data.packet); 
+
     avcodec_free_context(&wrapper.ctx);
 }
 

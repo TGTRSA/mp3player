@@ -1,7 +1,12 @@
+
 CC = g++
-SOURCE_FILENAME = audio_player
-SOURCE = $(SOURCE_FILENAME).cpp
-OUTPUT = $(SOURCE_FILENAME).o
+#SOURCES = audio_player.cpp send.cpp
+SOURCES =  pcm.cpp
+#OUTPUT = audio_player
+OUTPUT = pcm
+CFLAGS = -I/usr/include -L/usr/lib -lavformat -lavcodec -lavutil -lasound
+
 
 all:
-	$(CC) $(SOURCE) -o $(OUTPUT) -lasound `pkg-config --cflags --libs libavformat libavcodec libavutil `
+	$(CC) $(SOURCES) -o $(OUTPUT) $(CFLAGS) 
+

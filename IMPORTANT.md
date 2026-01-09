@@ -1,7 +1,7 @@
 # DECODING AUDIO INTO PCM
 
 ## Getting file streams
-    ### What it requires:
+### What it requires:
         
 
     AVFormatContext *fmt = NULL;
@@ -26,13 +26,14 @@
 
 
 ## CREATE DECODER:
-    ### What it requires:
-        AVCodecParameters                                               
-        AVCodec
-        AVCodecContext
-    ### What it requires:
-        AVFormatContext
-        int => audio_stream
+### What it requires:
+    AVCodecParameters                   
+    AVCodec
+    AVCodecContext
+
+### What it requires:
+    AVFormatContext
+    int => audio_stream
 
     AVCodecParameters *par = fmt->streams[audio_stream]->codecpar;
     const AVCodec *codec = avcodec_find_decoder(par->codec_id);
@@ -43,12 +44,14 @@
 
     Idaas:
         function:
+            parameters:
+                int stream
             create_decoder() => decode():
                 returns decoder:AVCodecContext while decode runs avcodec_open2
             decode()
 
 ## READ AND MAKE FRAME TYPE: => 
-    ### What it requires:
+### What it requires:
         AVPacket
         AVFrame
     
@@ -71,17 +74,17 @@
 
 # CONVERT FRAMES INTO PCM
 
-SwrContext *swr = swr_alloc_set_opts(
-    NULL,
-    AV_CH_LAYOUT_STEREO,        // output layout
-    AV_SAMPLE_FMT_S16,          // output format (PCM)
-    44100,                      // output sample rate
+    SwrContext *swr = swr_alloc_set_opts(
+            NULL,
+            AV_CH_LAYOUT_STEREO,        // output layout
+            AV_SAMPLE_FMT_S16,          // output format (PCM)
+            44100,                      // output sample rate
 
-    frame->channel_layout,
-    frame->format,
-    frame->sample_rate,
+            frame->channel_layout,
+            frame->format,
+            frame->sample_rate,
 
-    0, NULL
-);
+            0, NULL
+    );
 
 swr_init(swr);
