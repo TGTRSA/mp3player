@@ -132,7 +132,7 @@ int convert_to_pcm(Decoder d, Stream stream) {
     const char* sample_fmt_string = av_get_sample_fmt_name(sample_fmt);
     std::cout << "Sample format: " << sample_fmt_string << std::endl;
 
-    avcodec_open2(d.dec, d.codec, nullptr);
+    avcodec_open2(d.dec, d.codec, nullptr); //initializes the decoder so they say
 
     if(!(compressed_data_container = av_packet_alloc()) ){
         std::cerr << "Could not allocate packets";
