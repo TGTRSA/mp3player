@@ -16,8 +16,7 @@ extern "C" {
 }
 
 
-static AVFormatContext *av_fmt_ctx = NULL;
-int audio_stream;
+
 
 
 //file / stream
@@ -29,7 +28,7 @@ int audio_stream;
 //raw PCM (S16_LE / FLOAT / etc.)
 //
 struct Stream {
-    AVFormatContext    *av_fmt_ctx    = NULL;
+    AVFormatContext     *av_fmt_ctx    = NULL;
     AVMediaType         media_type = AVMEDIA_TYPE_AUDIO;
     int                 audio_stream;
 };
@@ -98,7 +97,7 @@ Decoder create_decoder(Stream stream) {
 
     // get codec parameters
     decoder.parameters  = stream.av_fmt_ctx->streams[stream.audio_stream]->codecpar;
-    std::cout << "Retriving codec parameters";
+    std::cout << "Retrieving codec parameters";
     if (!decoder.parameters) {
         std::cerr << "Could not retrieve codec parameters\n";
     };
@@ -107,25 +106,63 @@ Decoder create_decoder(Stream stream) {
     // find codec
     decoder.codec    = avcodec_find_decoder(decoder.parameters->codec_id);
     if (!decoder.codec){
-        std::cerr << "Could not evaluate codec";
+        std::cerr << "Could not evaluate codec" << std::endl;
     }
     // allocate decoder context
-    decoder.dec     = avcodec_alloc_context3(decoder.codec);
+    decoder.dec   = avcodec_alloc_context3(decoder.codec);
     if (!decoder.dec){
-        std::cerr << "Error retrieving decoder context";
+        std::cerr << "Error retrieving decoder context" << std::endl;
     }
 
     // initialise decoder parameters from context
-    if (!avcodec_parameters_to_context(decoder.dec, decoder.parameters)){
-        std::cerr << "Error assigning parameters to context";
+    if ((avcodec_parameters_to_context(decoder.dec, decoder.parameters)) < 0){
+        std::cerr << "Error assigning parameters to context\n";
     }
     
     return decoder;
 
 }
 
-void convert_to_pcm(Decoder decoder) {
+int convert_to_pcm(Decoder d, Stream stream) {
+    int ret, rc;
+    AVPacket    *compressed_data_container; // container for compressed encoded data 
+    AVFrame     *container_for_decompressed_data; //  container for pcm data
     
+    AVSampleFormat sample_fmt = d.dec->sample_fmt;
+    const char* sample_fmt_string = av_get_sample_fmt_name(sample_fmt);
+    std::cout << "Sample format: " << sample_fmt_string << std::endl;
+
+    if(!(compressed_data_container = av_packet_alloc()) ){
+        std::cerr << "Could not allocate packets";
+    }
+
+    // gives the frame struct some capability to accept compressed packets??
+    container_for_decompressed_data = av_frame_alloc();
+    if (!container_for_decompressed_data){
+        std::cerr << "Could not alloc frame";
+    }
+    // i assume "gives" the frames to the encoded_data_container
+    while ((av_read_frame(stream.av_fmt_ctx, compressed_data_container)) >= 0){
+
+        // reads whats in the compressed data container and translates it into the decode state
+        ret = avcodec_send_packet(d.dec, compressed_data_container);
+        if (ret<0)
+        {
+            std::cerr << " Could not decode packets";
+            break;
+        }
+        while((rc = avcodec_receive_frame(d.dec,container_for_decompressed_data)) >= 0){
+            std::cout << container_for_decompressed_data;
+            }
+        av_packet_unref(compressed_data_container);
+    }
+                
+    
+    
+    
+av_packet_free(&compressed_data_container);
+av_frame_free(&container_for_decompressed_data);
+    return 0;
 }
 
 
@@ -137,9 +174,9 @@ int main() {
     if (std::filesystem::exists(path)) {
         std::cout << path << " exists!\n";
         Stream stream = get_streams(path);
-        std::cout<< "Stream: " << stream.audio_stream;
+        std::cout<< "Stream: " << stream.audio_stream << std::endl;
         Decoder decoder = create_decoder(stream);
-        //void convert_tp_pcm();
+        convert_to_pcm(decoder, stream);
     } else {
         std::cout << path << " does NOT exist.\n";
     }
