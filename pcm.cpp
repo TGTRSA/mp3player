@@ -127,10 +127,12 @@ int convert_to_pcm(Decoder d, Stream stream) {
     int ret, rc;
     AVPacket    *compressed_data_container; // container for compressed encoded data 
     AVFrame     *container_for_decompressed_data; //  container for pcm data
-    
+
     AVSampleFormat sample_fmt = d.dec->sample_fmt;
     const char* sample_fmt_string = av_get_sample_fmt_name(sample_fmt);
     std::cout << "Sample format: " << sample_fmt_string << std::endl;
+
+    avcodec_open2(d.dec, d.codec, nullptr);
 
     if(!(compressed_data_container = av_packet_alloc()) ){
         std::cerr << "Could not allocate packets";
@@ -140,6 +142,8 @@ int convert_to_pcm(Decoder d, Stream stream) {
     container_for_decompressed_data = av_frame_alloc();
     if (!container_for_decompressed_data){
         std::cerr << "Could not alloc frame";
+    }else {
+        std::cout << "Allocated frames successfully";
     }
     // i assume "gives" the frames to the encoded_data_container
     while ((av_read_frame(stream.av_fmt_ctx, compressed_data_container)) >= 0){
@@ -148,6 +152,7 @@ int convert_to_pcm(Decoder d, Stream stream) {
         ret = avcodec_send_packet(d.dec, compressed_data_container);
         if (ret<0)
         {
+            //[FIX]
             std::cerr << " Could not decode packets";
             break;
         }
@@ -160,8 +165,8 @@ int convert_to_pcm(Decoder d, Stream stream) {
     
     
     
-av_packet_free(&compressed_data_container);
-av_frame_free(&container_for_decompressed_data);
+    av_packet_free(&compressed_data_container);
+    av_frame_free(&container_for_decompressed_data);
     return 0;
 }
 
