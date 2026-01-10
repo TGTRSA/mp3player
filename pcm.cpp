@@ -48,6 +48,7 @@ struct Decoder {
 };
 
 
+
 struct AudioFormat {
     uint64_t        channel_layout;
     enum AVSampleFormat sample_fmt;
@@ -97,17 +98,34 @@ Decoder create_decoder(Stream stream) {
 
     // get codec parameters
     decoder.parameters  = stream.av_fmt_ctx->streams[stream.audio_stream]->codecpar;
+    std::cout << "Retriving codec parameters";
+    if (!decoder.parameters) {
+        std::cerr << "Could not retrieve codec parameters\n";
+    };
+    print_success();
 
     // find codec
     decoder.codec    = avcodec_find_decoder(decoder.parameters->codec_id);
-
+    if (!decoder.codec){
+        std::cerr << "Could not evaluate codec";
+    }
     // allocate decoder context
     decoder.dec     = avcodec_alloc_context3(decoder.codec);
-    
+    if (!decoder.dec){
+        std::cerr << "Error retrieving decoder context";
+    }
+
     // initialise decoder parameters from context
-    avcodec_parameters_to_context(decoder.dec, decoder.parameters);
+    if (!avcodec_parameters_to_context(decoder.dec, decoder.parameters)){
+        std::cerr << "Error assigning parameters to context";
+    }
+    
     return decoder;
 
+}
+
+void convert_to_pcm(Decoder decoder) {
+    
 }
 
 
@@ -120,7 +138,8 @@ int main() {
         std::cout << path << " exists!\n";
         Stream stream = get_streams(path);
         std::cout<< "Stream: " << stream.audio_stream;
-        void convert_tp_pcm();
+        Decoder decoder = create_decoder(stream);
+        //void convert_tp_pcm();
     } else {
         std::cout << path << " does NOT exist.\n";
     }
