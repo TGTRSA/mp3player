@@ -7,13 +7,14 @@
 #include <sys/time.h>
 #include <math.h>
 #include <filesystem>
+
 //#include <libavcodec/codec_par.h>
 extern "C" {
 #include <stdio.h>
+#include <sndfile.h>
     #include <libavcodec/avcodec.h>
     #include <libavformat/avformat.h>
     #include <libavcodec/packet.h>
-
     #include <libavcodec/codec_par.h>
     #include <libavutil/samplefmt.h>
     #include <libavutil/channel_layout.h>
@@ -166,8 +167,6 @@ int convert_to_pcm(Decoder d, Stream stream) {
             }
         av_packet_unref(compressed_data_container);
     }
-                
-    
     
     
     av_packet_free(&compressed_data_container);
@@ -175,14 +174,41 @@ int convert_to_pcm(Decoder d, Stream stream) {
     return 0;
 }
 
-fileInformation get_file_info() {
+void get_file_info(const char* filename) {
     fileInformation audio_info;
-    // TODO: Function that gets the sample rate
-
-    // TODO: Function taht gets the audio_chanels
-
-
-    return audio_info;
+    //av_register_all();
+    
+    AVFormatContext* format_ctx = nullptr;
+    if(avformat_open_input(&format_ctx, filename, nullptr, nullptr) != 0) {
+        std::cerr << "Could not open file" << std::endl;
+    
+    }
+    
+    if(avformat_find_stream_info(format_ctx, nullptr) < 0) {
+        std::cerr << "Could not find stream info" << std::endl;
+        
+    }
+    
+    // Find audio stream
+    int audio_stream = -1;
+    for(int i = 0; i < format_ctx->nb_streams; i++) {
+        if(format_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+            audio_stream = i;
+            break;
+        }
+    }
+    
+    if(audio_stream != -1) {
+        AVCodecParameters* codec_params = format_ctx->streams[audio_stream]->codecpar;
+        std::cout << "Codec: " << avcodec_get_name(codec_params->codec_id) << std::endl;
+        std::cout << "Channels: " << codec_params->ch_layout.nb_channels << std::endl;
+        std::cout << "Sample Rate: " << codec_params->sample_rate << " Hz" << std::endl;
+        std::cout << "Bitrate: " << codec_params->bit_rate << " bps" << std::endl;
+        std::cout << "Duration: " << format_ctx->duration / AV_TIME_BASE << " seconds" << std::endl;
+    }
+    
+    avformat_close_input(&format_ctx);
+    
 }
 
 void create_pcm_handler() {
@@ -192,7 +218,7 @@ void create_pcm_handler() {
     alsa.device_name;
     //snd_pcm_t *pcm_handle;                  // ALSA device handle
     //const char* alsa_device_name = "default";
-    get_file_info();
+    //get_file_info();
     int sample_rate = 48000;
     int audio_channels = 2;
     snd_pcm_uframes_t frame_size = 1024;
@@ -202,5 +228,7 @@ void create_pcm_handler() {
 
 
 int main() {
-
+    const char* path = "/home/tash/c++/sdl_mp3player/mp3/01 Ruin.mp3";
+    std::cout << path << std::endl;
+    get_file_info(path);
 }
