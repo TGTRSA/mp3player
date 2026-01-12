@@ -69,9 +69,14 @@ void print_success(){
 
 void write_to_alsa(AlsaUtils alsa_params, fileInformation audio_data ) {
     int offset;
-    alsa_params.buffer_size; 
+    int rc;
+    alsa_params.buffer_size;
+    const void *buffer;
     while (offset < audio_data.sample_rate){
-
+        rc = snd_pcm_writei(alsa_params.handler,  buffer, alsa_params.buffer_size);
+        if (rc==-EAGAIN) { 
+            std::cerr << "Error writing to alsa";
+        }
     }
 }
 
@@ -255,21 +260,6 @@ fileInformation get_file_info(const char* filename) {
     
     avformat_close_input(&format_ctx);
     return audio_info;
-}
-
-void create_pcm_handler() {
-    AlsaUtils alsa;
-
-    alsa.handler;
-    alsa.device_name;
-    //snd_pcm_t *pcm_handle;                  // ALSA device handle
-    //const char* alsa_device_name = "default";
-    //get_file_info();
-    int sample_rate = 48000;
-    int audio_channels = 2;
-    snd_pcm_uframes_t frame_size = 1024;
-    snd_pcm_stream_t stream_type = SND_PCM_STREAM_PLAYBACK;
-    int mode = 0;
 }
 
 
