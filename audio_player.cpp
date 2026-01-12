@@ -26,7 +26,7 @@ struct AlsaUtils {
     snd_pcm_t           *handler;
     const char*         device_name = "default";
     snd_pcm_uframes_t   buffer_size;
-    snd_pcm_stream_t    stream_type = SND_PCM_STREAM_PLAYBACK;
+    snd_pcm_stream_t    stream_type ;
     int                 mode        = 0;
 };
 
@@ -65,6 +65,25 @@ struct AudioFormat {
 void print_success(){
     std::cout << "SUCCESS\n";
 }
+
+
+AlsaUtils set_params() {
+    AlsaUtils alsa;
+    alsa.stream_type = SND_PCM_STREAM_PLAYBACK;
+    int rc = snd_pcm_open(&alsa.handler, alsa.device_name,alsa.stream_type , alsa.mode);
+    if (rc < 0) {
+        fprintf(stderr, "Could not open ALSA device: %s\n", snd_strerror(rc));
+        
+    }
+
+    return alsa;
+
+}
+
+void play_music(){
+   AlsaUtils alsa_params = set_params(); 
+}
+
 
 Stream get_streams(const char* filename) {
     int rc;
