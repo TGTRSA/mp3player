@@ -31,6 +31,7 @@ struct AlsaUtils {
 };
 
 struct fileInformation {
+    std::string codec;
     int sample_rate;
     int audio_channels;
 };
@@ -129,7 +130,7 @@ Decoder create_decoder(Stream stream) {
 
 }
 
-int convert_to_pcm(Decoder d, Stream stream) {
+int convert_to_pcm(Decoder d, Stream stream, fileInformation audio_metadata) {
     int ret, rc;
     AVPacket    *compressed_data_container; // container for compressed encoded data 
     AVFrame     *container_for_decompressed_data; //  container for pcm data
@@ -164,6 +165,7 @@ int convert_to_pcm(Decoder d, Stream stream) {
         }
         while((rc = avcodec_receive_frame(d.dec,container_for_decompressed_data)) >= 0){
             std::cout << container_for_decompressed_data;
+
             }
         av_packet_unref(compressed_data_container);
     }
@@ -174,7 +176,7 @@ int convert_to_pcm(Decoder d, Stream stream) {
     return 0;
 }
 
-void get_file_info(const char* filename) {
+fileInformation get_file_info(const char* filename) {
     fileInformation audio_info;
     //av_register_all();
     
@@ -197,18 +199,22 @@ void get_file_info(const char* filename) {
             break;
         }
     }
-    
-    if(audio_stream != -1) {
+       if(audio_stream != -1) {
         AVCodecParameters* codec_params = format_ctx->streams[audio_stream]->codecpar;
-        std::cout << "Codec: " << avcodec_get_name(codec_params->codec_id) << std::endl;
+     audio_info.codec = avcodec_get_name(codec_params->codec_id);
+    audio_info.audio_channels = codec_params->ch_layout.nb_channels;
+    audio_info.sample_rate = codec_params->sample_rate;
+
+        std::cout << "Codec: " << audio_info.codec << std::endl;
         std::cout << "Channels: " << codec_params->ch_layout.nb_channels << std::endl;
         std::cout << "Sample Rate: " << codec_params->sample_rate << " Hz" << std::endl;
         std::cout << "Bitrate: " << codec_params->bit_rate << " bps" << std::endl;
         std::cout << "Duration: " << format_ctx->duration / AV_TIME_BASE << " seconds" << std::endl;
     }
     
-    avformat_close_input(&format_ctx);
     
+    avformat_close_input(&format_ctx);
+    return audio_info;
 }
 
 void create_pcm_handler() {
@@ -228,7 +234,8 @@ void create_pcm_handler() {
 
 
 int main() {
+    fileInformation metadata;
     const char* path = "/home/tash/c++/sdl_mp3player/mp3/01 Ruin.mp3";
     std::cout << path << std::endl;
-    get_file_info(path);
+    metadata=get_file_info(path);
 }
