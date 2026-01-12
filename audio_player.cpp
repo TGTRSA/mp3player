@@ -2,6 +2,7 @@
 #include <iostream>
 #include <alsa/asoundlib.h>
 #include <sched.h>
+#include <typeinfo>
 #include <errno.h>
 #include <getopt.h>
 #include <sys/time.h>
@@ -75,9 +76,16 @@ void write_to_alsa(AlsaUtils alsa_params, fileInformation audio_data ) {
     while (offset < audio_data.sample_rate){
         rc = snd_pcm_writei(alsa_params.handler,  buffer, alsa_params.buffer_size);
         if (rc==-EAGAIN) { 
+            continue;
+        }
+        if (rc<0) {
             std::cerr << "Error writing to alsa";
+            exit(EXIT_FAILURE);
         }
     }
+    snd_pcm_drain(alsa_params.handler);
+    snd_pcm_close(alsa_params.handler);
+
 }
 
 AlsaUtils set_params(fileInformation audio_data) {
@@ -140,6 +148,7 @@ Stream get_streams(const char* filename) {
     stream.audio_stream = av_find_best_stream(
         stream.av_fmt_ctx, AVMEDIA_TYPE_AUDIO, -1, -1, NULL, 0
     );
+    
 
     return stream;
 }
@@ -209,8 +218,11 @@ int convert_to_pcm(Decoder d, Stream stream, fileInformation audio_metadata) {
             break;
         }
         while((rc = avcodec_receive_frame(d.dec,container_for_decompressed_data)) >= 0){
-            //std::cout << container_for_decompressed_data;
-            play_music(container_for_decompressed_data, audio_metadata);
+            std::cout << container_for_decompressed_data << std::endl;
+            std::string d_type = typeid(container_for_decompressed_data).name();
+
+            std::cout << "D_type" << d_type << std::endl;
+            //play_music(container_for_decompressed_data, audio_metadata);
             }
         av_packet_unref(compressed_data_container);
     }
@@ -268,4 +280,7 @@ int main() {
     const char* path = "/home/tash/c++/sdl_mp3player/mp3/01 Ruin.mp3";
     std::cout << path << std::endl;
     metadata=get_file_info(path);
+    Stream s = get_streams(path);
+    Decoder d =create_decoder(s);
+    convert_to_pcm(d, s, metadata);
 }
