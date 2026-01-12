@@ -67,7 +67,15 @@ void print_success(){
 }
 
 
-AlsaUtils set_params() {
+void write_to_alsa(AlsaUtils alsa_params, fileInformation audio_data ) {
+    int offset;
+    alsa_params.buffer_size; 
+    while (offset < audio_data.sample_rate){
+
+    }
+}
+
+AlsaUtils set_params(fileInformation audio_data) {
     AlsaUtils alsa;
     alsa.stream_type = SND_PCM_STREAM_PLAYBACK;
     int rc = snd_pcm_open(&alsa.handler, alsa.device_name,alsa.stream_type , alsa.mode);
@@ -75,13 +83,26 @@ AlsaUtils set_params() {
         fprintf(stderr, "Could not open ALSA device: %s\n", snd_strerror(rc));
         
     }
-
+    rc = snd_pcm_set_params(
+        alsa.handler,
+        SND_PCM_FORMAT_FLOAT_LE,
+        SND_PCM_ACCESS_RW_INTERLEAVED,
+        audio_data.audio_channels,
+        audio_data.sample_rate,
+        1,        // soft_resample
+        50000     // latency in microseconds
+    );
+    if (rc < 0) {
+        fprintf(stderr, "Unable to set PCM parameters: %s\n", snd_strerror(rc));
+        
+    };
     return alsa;
 
 }
 
-void play_music(){
-   AlsaUtils alsa_params = set_params(); 
+void play_music(AVFrame* pcm_data ,fileInformation audio_data){
+   AlsaUtils alsa_params = set_params(audio_data); 
+   write_to_alsa(alsa_params, audio_data);
 }
 
 
@@ -183,8 +204,8 @@ int convert_to_pcm(Decoder d, Stream stream, fileInformation audio_metadata) {
             break;
         }
         while((rc = avcodec_receive_frame(d.dec,container_for_decompressed_data)) >= 0){
-            std::cout << container_for_decompressed_data;
-
+            //std::cout << container_for_decompressed_data;
+            play_music(container_for_decompressed_data, audio_metadata);
             }
         av_packet_unref(compressed_data_container);
     }
