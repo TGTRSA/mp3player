@@ -26,7 +26,7 @@ extern "C" {
 struct AlsaHandle {
     snd_pcm_t           *pcm;
     const char *        device_name = "default";
-    snd_pcm_uframes_t   buffer_size; // size of frames: usgined int => either 1 or 2 stereo or mono
+    snd_pcm_uframes_t   buffer_size = 1024; // size of frames: usgined int => either 1 or 2 stereo or mono
     snd_pcm_stream_t    stream_type = SND_PCM_STREAM_PLAYBACK;
     int                 mode        = 0 ;
 };
@@ -35,6 +35,19 @@ struct AudioMetadata {
     int channels;
     int sample_rate;
 };
+
+void play_audio(AlsaHandle alsa, AudioMetadata audiometada, std::byte pcm_data){
+    float buffer;
+    int offset = 0;
+    while(offset< audiometada.sample_rate){ //doing loop for number of frames => sample rate
+        std::cout << "Doing stuff";
+        snd_pcm_uframes_t frames_to_write = alsa.buffer_size; // dynamic value for chunking 
+        if(offset+alsa.buffer_size > alsa.buffer_size) {
+            frames_to_write = alsa.buffer_size - audiometada.sample_rate;
+        }
+    }
+
+}
 
 int configure_params(AlsaHandle alsa, AudioMetadata audiodata){
     int rc = snd_pcm_set_params(
