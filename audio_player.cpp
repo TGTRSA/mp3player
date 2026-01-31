@@ -123,10 +123,13 @@ int main() {
     int rc;
     std::cout << "Starting program "<<std::endl ;
 
-    const char* path = "/home/tash/c++/sdl_mp3player/mp3/01 Ruin.mp3"; 
+    const char* path = "/home/tash/c++/audio_player/mp3/01 Ruin.mp3"; 
 
     s = get_audio_streams(path);
-
+    if (!(s.audio_stream>0)){
+        fprintf(stderr, "Error no audio streams");
+        return 0;
+    }
     rc = open_alsa_dev(alsa);
     if (rc < 0) {
         fprintf(stderr, "Could not open ALSA device: %s\n", snd_strerror(rc));
