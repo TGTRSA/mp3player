@@ -7,8 +7,9 @@
 #include <getopt.h>
 #include <sys/time.h>
 //#include <math.h>
-//#include <filesystem>
+#include <filesystem>
 
+namespace  fs= std::filesystem;
 //#include <libavcodec/codec_par.h>
 extern "C" {
 #include <stdio.h>
@@ -124,6 +125,14 @@ int main() {
     std::cout << "Starting program "<<std::endl ;
 
     const char* path = "/home/tash/c++/audio_player/mp3/01 Ruin.mp3"; 
+    std::string string_path = path;
+    fs::path existing_path(path);
+    if(!(fs::exists(existing_path))){
+        std::cout << "File does not exist" << std::endl;
+        return 0;
+    }else{
+        std::cout << path << " exists" <<std::endl;
+    }
 
     s = get_audio_streams(path);
     if (!(s.audio_stream>0)){
