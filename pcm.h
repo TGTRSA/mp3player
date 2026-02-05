@@ -55,37 +55,33 @@ inline void print_success(){
     std::cout << "SUCCESS\n";
 }
 
-inline Stream get_streams(const char* filename) {
+Stream get_audio_streams(const char *filename) {
+    Stream s;// Initialize with safe defaults
     int rc;
-    Stream stream;
 
-    AVDictionary *dict_opt=NULL;
-
-    /* open input file, and allocate format context */
-    stream.av_fmt_ctx = avformat_alloc_context();
-    std::cout << "allocating context to avformat\n";
-    if (!stream.av_fmt_ctx) {
-        fprintf(stderr, "Could not allocate AVFormatContext\n");
-        return stream;
+    // Open input: handles allocation if s.av_fmt_ctx is NULL
+    rc = avformat_open_input(&s.av_fmt_ctx, filename, NULL, NULL);
+    if (rc < 0) {
+        char errbuf[256];
+        av_strerror(rc, errbuf, sizeof(errbuf));
+        std::cerr << "Could not open " << filename << ": " << errbuf << std::endl;
+        return s; 
     }
-    print_success();
 
-    /* retrieve stream information */
-    rc = avformat_open_input(&stream.av_fmt_ctx,filename ,NULL , NULL);
-    std::cout << "Opening avformat\n";
-    if (rc<0){
-        fprintf(stderr, "Could not open file stream\n");
-        avformat_free_context(stream.av_fmt_ctx);
+    // Retrieve stream information
+    if (avformat_find_stream_info(s.av_fmt_ctx, NULL) < 0) {
+        std::cerr << "Could not find stream information" << std::endl;
+        avformat_close_input(&s.av_fmt_ctx);
+        return s;
     }
-    print_success();
 
-    avformat_find_stream_info(stream.av_fmt_ctx, &dict_opt);
-    std::cout << "Collecting streams\n";
-    stream.audio_stream = av_find_best_stream(
-        stream.av_fmt_ctx, AVMEDIA_TYPE_AUDIO, -1, -1, NULL, 0
-    );
+    // Find the best audio stream
+    s.audio_stream = av_find_best_stream(s.av_fmt_ctx, AVMEDIA_TYPE_AUDIO, -1, -1, NULL, 0);
+    if (s.audio_stream < 0) {
+        std::cerr << "Could not find an audio stream in " << filename << std::endl;
+    }
 
-    return stream;
+    return s;
 }
 
 inline Decoder create_decoder(Stream stream) {
