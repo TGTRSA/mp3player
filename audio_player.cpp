@@ -1,14 +1,17 @@
 //#include <cstdint>
+#include "pcm.h"
+#include <cstdint>
 #include <iostream>
 #include <alsa/asoundlib.h>
 #include <sched.h>
-#include <useful_funcs.h>
+#include "useful_funcs.h"
 //#include <typeinfo>
 //#include <errno.h>
 #include <getopt.h>
 #include <sys/time.h>
 //#include <math.h>
 #include <filesystem>
+#include <vector>
 
 namespace  fs= std::filesystem;
 //#include <libavcodec/codec_par.h>
@@ -23,16 +26,6 @@ extern "C" {
     #include <libavutil/channel_layout.h>
 
 //#include <libavutil/samplefmt.h>
-}
-
-// Represents the entire media file => All of its "byte" data
-struct Stream {
-
-    AVFormatContext     *av_fmt_ctx     = nullptr;
-
-    AVMediaType         media_type      = AVMEDIA_TYPE_AUDIO;
-
-    int                 audio_stream    = -1 ;
 };
 
 struct AlsaHandle {
@@ -47,35 +40,6 @@ struct AudioMetadata {
     int channels;
     int sample_rate;
 };
-
-Stream get_audio_streams(const char *filename) {
-    Stream s;// Initialize with safe defaults
-    int rc;
-
-    // Open input: handles allocation if s.av_fmt_ctx is NULL
-    rc = avformat_open_input(&s.av_fmt_ctx, filename, NULL, NULL);
-    if (rc < 0) {
-        char errbuf[256];
-        av_strerror(rc, errbuf, sizeof(errbuf));
-        std::cerr << "Could not open " << filename << ": " << errbuf << std::endl;
-        return s; 
-    }
-
-    // Retrieve stream information
-    if (avformat_find_stream_info(s.av_fmt_ctx, NULL) < 0) {
-        std::cerr << "Could not find stream information" << std::endl;
-        avformat_close_input(&s.av_fmt_ctx);
-        return s;
-    }
-
-    // Find the best audio stream
-    s.audio_stream = av_find_best_stream(s.av_fmt_ctx, AVMEDIA_TYPE_AUDIO, -1, -1, NULL, 0);
-    if (s.audio_stream < 0) {
-        std::cerr << "Could not find an audio stream in " << filename << std::endl;
-    }
-
-    return s;
-}
 
 void play_audio(AlsaHandle alsa, AudioMetadata audiometada, const void * pcm_data){
     //float buffer;
@@ -125,12 +89,13 @@ int open_alsa_dev(AlsaHandle &alsa){
     return rc;
 }
 
-
 // int argc, char[] * argv 
 int main() {
     AlsaHandle alsa;
     AudioMetadata metadata;
-    
+    Decoder d;
+    std::vector<uint8_t> pcm_buffer;
+
     int rc;
     std::cout << "Starting program "<<std::endl ;
 
@@ -168,7 +133,13 @@ int main() {
         fprintf(stderr, "Unable to set PCM parameters: %s\n", snd_strerror(rc));
         return 1;
     }
-
+    d = create_decoder(s);
+    std::cout << "Attempting to convert bytes to PCM" <<std::endl;
+    pcm_buffer = convert_to_pcm(d,s);
+    if(pcm_buffer.size()>0){
+        print_success();
+    }
+    //play_audio( alsa, metadata, );
 
     return 0;
 }

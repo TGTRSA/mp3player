@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <iostream>
 #include <filesystem>
+#include <vector>
 extern "C" {
 #include <stdio.h>
     #include <libavcodec/avcodec.h>
@@ -55,7 +56,7 @@ inline void print_success(){
     std::cout << "SUCCESS\n";
 }
 
-Stream get_audio_streams(const char *filename) {
+inline Stream get_audio_streams(const char *filename) {
     Stream s;// Initialize with safe defaults
     int rc;
 
@@ -115,7 +116,8 @@ inline Decoder create_decoder(Stream stream) {
 
 }
 
-inline int convert_to_pcm(Decoder d, Stream stream) {
+inline std::vector<uint8_t> convert_to_pcm(Decoder d, Stream stream) {
+    std::vector<uint8_t> pcm_buffer; 
     int ret, rc;
     AVPacket    *compressed_data_container; // container for compressed encoded data 
     AVFrame     *container_for_decompressed_data; //  container for pcm data
@@ -126,20 +128,24 @@ inline int convert_to_pcm(Decoder d, Stream stream) {
 
     avcodec_open2(d.dec, d.codec, nullptr); //initializes the decoder so they say
 
-    if(!(compressed_data_container = av_packet_alloc()) ){
-        std::cerr << "Could not allocate packets";
+    if(!(compressed_data_container = av_packet_alloc()) )
+    {
+        std::cerr << "Could not allocate packets" << std::endl;
     }
 
     // gives the frame struct some capability to accept compressed packets??
     container_for_decompressed_data = av_frame_alloc();
-    if (!container_for_decompressed_data){
+    if (!container_for_decompressed_data)
+    {
         std::cerr << "Could not alloc frame";
     }else {
         std::cout << "Allocated frames successfully";
     }
     // i assume "gives" the frames to the encoded_data_container
-    while ((av_read_frame(stream.av_fmt_ctx, compressed_data_container)) >= 0){
-        if(compressed_data_container->stream_index==stream.audio_stream){
+    while ((av_read_frame(stream.av_fmt_ctx, compressed_data_container)) >= 0)
+    {
+        if(compressed_data_container->stream_index==stream.audio_stream)
+        {
             // reads whats in the compressed data container and translates it into the decode state
             ret = avcodec_send_packet(d.dec, compressed_data_container);
             if (ret<0)
@@ -149,16 +155,30 @@ inline int convert_to_pcm(Decoder d, Stream stream) {
                 break;
             }
         }
+    }
         while((rc = avcodec_receive_frame(d.dec,container_for_decompressed_data)) >= 0){
+            int data_size = av_get_bytes_per_sample(d.dec->sample_fmt);
+            // For simplicity, let's just copy the raw data from channel 0
+                    for (int i = 0; i < container_for_decompressed_data->nb_samples; i++) {
+                        for (int ch = 0; ch < d.dec->ch_layout.nb_channels; ch++) {
+                            // Copy bytes into our vector
+                            uint8_t* sample_ptr = container_for_decompressed_data->data[ch] + (data_size * i);
+                            for(int b = 0; b < data_size; b++) {
+                                pcm_buffer.push_back(sample_ptr[b]);
+                            }
+                        
             std::cout << container_for_decompressed_data;
             }
         av_packet_unref(compressed_data_container);
-    }
+        }
+        }
                   
     av_packet_free(&compressed_data_container);
     av_frame_free(&container_for_decompressed_data);
-    return 0;
+    return pcm_buffer;
+
 }
+    
 #endif //PCM.H
 
 //int main() {
